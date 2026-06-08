@@ -47,12 +47,11 @@ jobs:
           UKEY="$(printf '%s' "$USERNAME" | tr '[:upper:]' '[:lower:]')"
           EXPECTED="$JOIN_CODE"
 
-          # handle + DELETE the issue (removes public PII/activity trail). Redact body first as a fallback
-          # in case delete is unavailable; close as a last resort.
+          # redact the PII body (name/email), comment the reason, then close (keeps a record for the student, no PII)
           fail() {
-            gh issue edit "$ISSUE" --body "(redacted)" >/dev/null 2>&1 || true
+            gh issue edit "$ISSUE" --body "Registration processed — personal details redacted for privacy." >/dev/null 2>&1 || true
             gh issue comment "$ISSUE" --body "$1"
-            GH_TOKEN="$ORG_PAT" gh issue delete "$ISSUE" --yes >/dev/null 2>&1 || gh issue close "$ISSUE" >/dev/null 2>&1
+            gh issue close "$ISSUE"
             exit 0
           }
 
@@ -71,7 +70,7 @@ jobs:
           GH_TOKEN="$ORG_PAT" gh api -X PUT "repos/$DATA_REPO/contents/roster/$UKEY.json" \
             -f message="register: $UKEY" -f content="$CONTENT_B64" ${SHA:+-f sha="$SHA"} >/dev/null
 
-          # --- confirm (username only — student gets it via notification), then DELETE the issue (no public trail) ---
-          gh issue edit "$ISSUE" --body "(redacted)" >/dev/null 2>&1 || true
+          # --- redact PII from the public issue body, confirm (username only), close (keeps record, no PII) ---
+          gh issue edit "$ISSUE" --body "Registration processed — personal details redacted for privacy." >/dev/null
           gh issue comment "$ISSUE" --body "✅ Registered as \`$UKEY\`. You can now request assignment repos from your Canvas course link."
-          GH_TOKEN="$ORG_PAT" gh issue delete "$ISSUE" --yes >/dev/null 2>&1 || gh issue close "$ISSUE" >/dev/null 2>&1
+          gh issue close "$ISSUE"
