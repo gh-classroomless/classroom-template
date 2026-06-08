@@ -26,6 +26,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           JOIN_CODE: ${{ secrets.JOIN_CODE }}   # the class code lives in secrets, NOT public config.json
+          ORG_PAT: ${{ secrets.ORG_PAT }}       # to write roster to the PRIVATE data repo
           ISSUE: ${{ github.event.issue.number }}
           USERNAME: ${{ github.event.issue.user.login }}
           BODY: ${{ github.event.issue.body }}
@@ -58,26 +59,16 @@ jobs:
           [ -n "$NAME" ] && [ -n "$EMAIL" ] || \
             fail "❌ Registration failed: **name** and **email** are required."
 
-          # --- write roster entry (jq --arg = safe JSON, no string concat) ---
-          mkdir -p roster
+          # --- write roster to the PRIVATE data repo via Contents API (key-per-file upsert, ORG_PAT) ---
+          DATA_REPO="${GH_REPO}-data"   # e.g. AVC-CS/classroom-data (PII lives here, not in public hub)
           STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          jq -n --arg u "$UKEY" --arg n "$NAME" --arg e "$EMAIL" --arg t "$STAMP" \
-            '{username:$u, name:$n, email:$e, registered:$t}' > "roster/$UKEY.json"
+          CONTENT_B64="$(jq -n --arg u "$UKEY" --arg n "$NAME" --arg e "$EMAIL" --arg t "$STAMP" \
+            '{username:$u, name:$n, email:$e, registered:$t}' | base64 -w0)"
+          SHA="$(GH_TOKEN="$ORG_PAT" gh api "repos/$DATA_REPO/contents/roster/$UKEY.json" --jq .sha 2>/dev/null || true)"
+          GH_TOKEN="$ORG_PAT" gh api -X PUT "repos/$DATA_REPO/contents/roster/$UKEY.json" \
+            -f message="register: $UKEY" -f content="$CONTENT_B64" ${SHA:+-f sha="$SHA"} >/dev/null
 
-          # --- commit (key-per-file: re-register overwrites same file = upsert) ---
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "roster/$UKEY.json"
-          if git diff --cached --quiet; then
-            echo "roster unchanged"
-          else
-            git commit -m "register: $UKEY"
-            for i in 1 2 3 4 5; do
-              git push && break
-              echo "push race, retry $i"
-              git pull --rebase --autostash
-            done
-          fi
-
-          gh issue comment "$ISSUE" --body "✅ Registered: **$NAME** (\`$UKEY\`). You can now request assignment repos from your Canvas course link."
+          # --- redact PII from the public issue body, confirm (username only — public), close ---
+          gh issue edit "$ISSUE" --body "Registration processed — personal details redacted for privacy." >/dev/null
+          gh issue comment "$ISSUE" --body "✅ Registered as \`$UKEY\`. You can now request assignment repos from your Canvas course link."
           gh issue close "$ISSUE"

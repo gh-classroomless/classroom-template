@@ -50,8 +50,10 @@ jobs:
           jq -e --arg c "$COURSE" '.courses[$c]' config.json >/dev/null 2>&1 \
             || fail "❌ Unknown course \`$COURSE\`."
 
-          # --- must be registered ---
-          [ -f "roster/$UKEY.json" ] \
+          # --- must be registered (roster lives in the PRIVATE data repo, read via ORG_PAT) ---
+          DATA_REPO="${GH_REPO}-data"
+          ROSTER="$(GH_TOKEN="$ORG_PAT" gh api "repos/$DATA_REPO/contents/roster/$UKEY.json" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)"
+          [ -n "$ROSTER" ] \
             || fail "❌ You're not registered yet. Register first: https://github.com/$GH_REPO/issues/new?template=01-register.yml (use your Canvas class code), then request again."
 
           # --- assignment must be in config; value = template string (always open) OR object with time gate ---
@@ -82,8 +84,8 @@ jobs:
           REPO="${REPO//\{assignment\}/$ASSIGN}"
           REPO="${REPO//\{username\}/$UKEY}"
 
-          NAME="$(jq -r '.name' "roster/$UKEY.json")"
-          EMAIL="$(jq -r '.email' "roster/$UKEY.json")"
+          NAME="$(jq -r '.name' <<<"$ROSTER")"
+          EMAIL="$(jq -r '.email' <<<"$ROSTER")"
 
           # --- create repo from template (idempotent); cross-repo → ORG_PAT ---
           if GH_TOKEN="$ORG_PAT" gh repo view "$ORG/$REPO" >/dev/null 2>&1; then
@@ -98,27 +100,14 @@ jobs:
           # --- ensure student is an outside collaborator (push); sends invite ---
           GH_TOKEN="$ORG_PAT" gh api -X PUT "repos/$ORG/$REPO/collaborators/$USERNAME" -f permission=push >/dev/null
 
-          # --- write/backfill log (jq --arg = safe) ---
-          mkdir -p log
+          # --- write log to the PRIVATE data repo (Contents API, ORG_PAT; PII not in public hub) ---
           STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          jq -n --arg t "$STAMP" --arg u "$UKEY" --arg n "$NAME" --arg e "$EMAIL" \
+          LOG_B64="$(jq -n --arg t "$STAMP" --arg u "$UKEY" --arg n "$NAME" --arg e "$EMAIL" \
                 --arg c "$COURSE" --arg a "$ASSIGN" --arg s "$SEM" --arg r "$REPO" \
-            '{time:$t, username:$u, name:$n, email:$e, course:$c, assignment:$a, semester:$s, repo:$r}' \
-            > "log/$REPO.json"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "log/$REPO.json"
-          if git diff --cached --quiet; then
-            echo "log unchanged"
-          else
-            git commit -m "request: $REPO"
-            for i in 1 2 3 4 5; do
-              git push && break
-              echo "push race, retry $i"
-              git pull --rebase --autostash
-            done
-          fi
+            '{time:$t, username:$u, name:$n, email:$e, course:$c, assignment:$a, semester:$s, repo:$r}' | base64 -w0)"
+          LSHA="$(GH_TOKEN="$ORG_PAT" gh api "repos/$DATA_REPO/contents/log/$REPO.json" --jq .sha 2>/dev/null || true)"
+          GH_TOKEN="$ORG_PAT" gh api -X PUT "repos/$DATA_REPO/contents/log/$REPO.json" \
+            -f message="request: $REPO" -f content="$LOG_B64" ${LSHA:+-f sha="$LSHA"} >/dev/null
 
           MSG="$(printf '✅ Repo: https://github.com/%s/%s\n👉 Accept the invite: https://github.com/%s/%s/invitations\nThen clone: `gh repo clone %s/%s`' "$ORG" "$REPO" "$ORG" "$REPO" "$ORG" "$REPO")"
           gh issue comment "$ISSUE" --body "$MSG"
