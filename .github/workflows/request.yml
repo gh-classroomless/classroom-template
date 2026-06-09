@@ -1,5 +1,8 @@
 name: request
 
+# ⚠️ Triggers/auto-writes: read playbook/automation-map.md before changing 'on:' or adding a commit-back.
+#    (GITHUB_TOKEN commits don't re-trigger workflows; ORG_PAT/PAT commits DO → loop risk.)
+
 on:
   issues:
     types: [opened]
@@ -51,7 +54,12 @@ jobs:
           ASSIGN="$(field Assignment)"
 
           [ -n "$COURSE" ] || fail "❌ Could not read the course from the issue title. Use the course's Request link from Canvas."
-          jq -e --arg c "$COURSE" '.courses[$c]' config.json >/dev/null 2>&1 \
+
+          # one shared source, per-org config: each org's repo auto-selects configs/<org>.json (#method-A)
+          CONFIG="configs/$ORG.json"
+          [ -f "$CONFIG" ] || fail "⚠️ Setup error: no config for org \`$ORG\` (expected $CONFIG)."
+
+          jq -e --arg c "$COURSE" '.courses[$c]' "$CONFIG" >/dev/null 2>&1 \
             || fail "❌ Unknown course \`$COURSE\`."
 
           # --- must be registered (roster lives in the PRIVATE data repo, read via ORG_PAT) ---
@@ -61,7 +69,7 @@ jobs:
             || fail "❌ You're not registered yet. Register first: https://github.com/$GH_REPO/issues/new?template=01-register.yml (use your Canvas class code), then request again."
 
           # --- assignment must be in config; value = template string (always open) OR object with time gate ---
-          ENTRY="$(jq -c --arg c "$COURSE" --arg a "$ASSIGN" '.courses[$c].assignments[$a] // empty' config.json)"
+          ENTRY="$(jq -c --arg c "$COURSE" --arg a "$ASSIGN" '.courses[$c].assignments[$a] // empty' "$CONFIG")"
           [ -n "$ENTRY" ] || fail "❌ Assignment \`$ASSIGN\` is not offered for $COURSE."
 
           if [ "$(jq -r 'type' <<<"$ENTRY")" = "string" ]; then
@@ -81,8 +89,8 @@ jobs:
           [ -n "$TEMPLATE" ] && [ "$TEMPLATE" != "null" ] \
             || fail "⚠️ Setup error: assignment \`$ASSIGN\` has no template in config."
 
-          SEM="$(jq -r --arg c "$COURSE" '.courses[$c].semester' config.json)"
-          PATTERN="$(jq -r --arg c "$COURSE" '.courses[$c].student_repo_pattern' config.json)"
+          SEM="$(jq -r --arg c "$COURSE" '.courses[$c].semester' "$CONFIG")"
+          PATTERN="$(jq -r --arg c "$COURSE" '.courses[$c].student_repo_pattern' "$CONFIG")"
           REPO="$PATTERN"
           REPO="${REPO//\{semester\}/$SEM}"
           REPO="${REPO//\{assignment\}/$ASSIGN}"

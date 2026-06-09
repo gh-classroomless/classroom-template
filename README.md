@@ -37,6 +37,7 @@ Just **Submit** (nothing to fill in) → you get a comment listing **all** your 
 **Not registered?** A request is rejected with the Register link — register first
 (it's instant once you use the class code).
 
-**Instructor:** course/assignment/semester values live in `config.json`; the org is auto-detected at
-runtime (`github.repository_owner`), so this hub is org-neutral. Student PII (name/email) and the
+**Instructor:** course/assignment/semester values live in `configs/<org>.json` (one config per org,
+e.g. `configs/AVC-CS.json`); the workflow auto-selects its own by `github.repository_owner`, so the
+identical source ships to every org and each reads only its own config. Student PII (name/email) and the
 submission report live in the private `…-admin` repo, never here.

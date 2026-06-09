@@ -1,5 +1,8 @@
 name: register
 
+# ⚠️ Triggers/auto-writes: read playbook/automation-map.md before changing 'on:' or adding a commit-back.
+#    (GITHUB_TOKEN commits don't re-trigger workflows; ORG_PAT/PAT commits DO → loop risk.)
+
 on:
   issues:
     types: [opened]
@@ -25,7 +28,7 @@ jobs:
           # ALL user-controlled values arrive as env vars — never inline ${{ }} in run: (injection-safe, #12)
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          JOIN_CODE: ${{ secrets.JOIN_CODE }}   # the class code lives in secrets, NOT public config.json
+          JOIN_CODE: ${{ secrets.JOIN_CODE }}   # the class code lives in secrets, NOT public configs/<org>.json
           ORG_PAT: ${{ secrets.ORG_PAT }}       # to write roster to the PRIVATE data repo
           ISSUE: ${{ github.event.issue.number }}
           USERNAME: ${{ github.event.issue.user.login }}

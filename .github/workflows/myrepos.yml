@@ -1,5 +1,8 @@
 name: myrepos
 
+# ⚠️ Triggers/auto-writes: read playbook/automation-map.md before changing 'on:' or adding a commit-back.
+#    (GITHUB_TOKEN commits don't re-trigger workflows; ORG_PAT/PAT commits DO → loop risk.)
+
 on:
   issues:
     types: [opened]
