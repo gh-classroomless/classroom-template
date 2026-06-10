@@ -7,7 +7,7 @@
 # register/myrepos/config.yml are course-agnostic and left untouched.
 #
 # THE single generator — run by both:
-#   - ops/sync.sh           (local, optional)
+#   - ops/cfg.sh                        (local, after editing a school's config.json)
 #   - .github/workflows/sync-forms.yml  (server, on config.json push)
 # One implementation → local and server never drift.
 set -euo pipefail
