@@ -17,6 +17,13 @@
         }
       },
       "student_repo_pattern": "cs120-{semester}-{assignment}-{username}"
+    },
+    "cs130": {
+      "semester": "sp26",
+      "assignments": {
+        "A00": "cs130-sp26-a00-cs120-sp26-a00-CS120A00"
+      },
+      "student_repo_pattern": "cs120-{semester}-{assignment}-{username}"
     }
   }
 }
