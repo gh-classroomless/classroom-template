@@ -140,6 +140,6 @@ jobs:
           else
             LEAD='✅ Repo created.'
           fi
-          MSG="$(printf '%s\nRepo: https://github.com/%s/%s\n👉 Accept the invite: https://github.com/%s/%s/invitations\nThen clone: `gh repo clone %s/%s`' "$LEAD" "$ORG" "$REPO" "$ORG" "$REPO" "$ORG" "$REPO")"
+          MSG="$(printf '%s\nRepo: https://github.com/%s/%s\n👉 Accept the invite: https://github.com/%s/%s/invitations\nThen clone: `gh repo clone %s/%s`\n💡 Find this repo again anytime → My repos: https://github.com/%s/issues/new?template=03-myrepos.yml  (the invite is also in your email / github.com/notifications)' "$LEAD" "$ORG" "$REPO" "$ORG" "$REPO" "$ORG" "$REPO" "$GH_REPO")"
           gh issue comment "$ISSUE" --body "$MSG"
           gh issue close "$ISSUE"
