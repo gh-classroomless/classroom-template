@@ -50,7 +50,7 @@ jobs:
 
           UKEY="$(printf '%s' "$USERNAME" | tr '[:upper:]' '[:lower:]')"
           # course from title prefix "request-<course>:" (no course hardcoded, #17)
-          COURSE="$(printf '%s' "$TITLE" | sed -n 's/^request-\([a-z0-9]*\):.*/\1/p')"
+          COURSE="$(printf '%s' "$TITLE" | sed -n 's/^request-\([^:]*\):.*/\1/p')"
           ASSIGN="$(field Assignment)"
 
           [ -n "$COURSE" ] || fail "❌ Could not read the course from the issue title. Use the course's Request link from Canvas."
@@ -107,10 +107,17 @@ jobs:
             EXISTED=1   # idempotent — repo already there, just return the existing link
           else
             EXISTED=0
-            # template must exist + be a template (setup error, not student fault)
-            GH_TOKEN="$ORG_PAT" gh repo view "$ORG/$TEMPLATE" >/dev/null 2>&1 \
-              || fail "⚠️ Setup error: template \`$ORG/$TEMPLATE\` not found. (Instructor: check config / template flag.)"
-            GH_TOKEN="$ORG_PAT" gh repo create "$ORG/$REPO" --template "$ORG/$TEMPLATE" --private
+            # Template must EXIST and be marked a template repo — `gh repo create --template` requires it.
+            # Check up front so a mis-set template reports the reason via fail(), instead of crashing under
+            # `set -e` at the create line (which left the issue silently Open with no comment).
+            IS_TPL="$(GH_TOKEN="$ORG_PAT" gh repo view "$ORG/$TEMPLATE" --json isTemplate --jq .isTemplate 2>/dev/null || echo missing)"
+            case "$IS_TPL" in
+              true)  : ;;
+              false) fail "❌ Could not create your repo: \`$ORG/$TEMPLATE\` is not a template repository." ;;
+              *)     fail "❌ Could not create your repo: template \`$ORG/$TEMPLATE\` was not found." ;;
+            esac
+            GH_TOKEN="$ORG_PAT" gh repo create "$ORG/$REPO" --template "$ORG/$TEMPLATE" --private \
+              || fail "❌ Could not create your repo from \`$ORG/$TEMPLATE\`."
           fi
 
           # --- ensure student is an outside collaborator (push); sends invite ---
@@ -125,8 +132,8 @@ jobs:
           GH_TOKEN="$ORG_PAT" gh api -X PUT "repos/$DATA_REPO/contents/log/$REPO.json" \
             -f message="request: $REPO" -f content="$LOG_B64" ${LSHA:+-f sha="$LSHA"} >/dev/null
 
-          # rename the issue so the author-filter list is self-explanatory (e.g. "request-cs120: A23")
-          gh issue edit "$ISSUE" --title "request-${COURSE}: ${ASSIGN}" >/dev/null 2>&1 || true
+          # rename the issue so the Closed list is self-identifying (each student sees their own)
+          gh issue edit "$ISSUE" --title "request-${COURSE}: ${ASSIGN} — @${USERNAME}" >/dev/null 2>&1 || true
 
           if [ "${EXISTED:-0}" = "1" ]; then
             LEAD='ℹ️ You already have this repo — returning your existing link (nothing new was created).'
